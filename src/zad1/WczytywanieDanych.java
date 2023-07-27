@@ -6,7 +6,8 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.function.Predicate;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class WczytywanieDanych {
     private final List<Lekarz> listaLekarzy = new ArrayList<>();
@@ -72,8 +73,8 @@ public class WczytywanieDanych {
                 int idLekarza = Integer.parseInt(data[0]);
                 int idPacjenta = Integer.parseInt(data[1]);
                 LocalDate dataWizyty = LocalDate.parse(data[2], formatter);
-                Lekarz lekarz = wyszukajObiektPoID(listaLekarzy, idLekarza, s -> s.getId() == idLekarza);
-                Pacjent pacjent = wyszukajObiektPoID(listaPacjentow, idPacjenta, s -> s.getId() == idPacjenta);
+                Lekarz lekarz = wyszukajObiektPoID(listaLekarzy, idLekarza);
+                Pacjent pacjent = wyszukajObiektPoID(listaPacjentow, idPacjenta);
                 listaWizyt.add(new Wizyta(lekarz, pacjent, dataWizyty));
             }
         } catch (IOException e) {
@@ -81,62 +82,37 @@ public class WczytywanieDanych {
         }
     }
 
-    private <T> int getIdFor(T object) {
-        if (object instanceof Lekarz) {
-            return ((Lekarz) object).getId();
-        } else if (object instanceof Pacjent) {
-            return ((Pacjent) object).getId();
-        } else {
-            throw new IllegalArgumentException("Obiekt nie jest typu Lekarz ani Pacjent");
-        }
-    }
-
-    public <T> T wyszukajObiektPoID(List<T> lista, int id, Predicate<T> predicate) {
+    public <T extends Identifiable> T wyszukajObiektPoID(List<T> lista, int id) {
         if (lista.isEmpty()) {
-            throw new IllegalArgumentException("lista jest pusta");
+            throw new IllegalArgumentException("Lista osób jest pusta!");
         }
-        for (T object : lista) {
-            if (predicate.test(object) && getIdFor(object) == id) {
-                return object;
-            }
+        Map<Integer, T> mapaObiektow = lista.stream().collect(Collectors.toMap(Identifiable::getID, Function.identity()));
+        T znalezionyObiekt = mapaObiektow.get(id);
+        if (znalezionyObiekt != null) {
+            return znalezionyObiekt;
         }
-        throw new NullPointerException("Nie ma osoby o podanym ID");
+        throw new IllegalArgumentException("Nie ma osoby o podanym ID");
     }
 
-    public Lekarz znajdzLekarzaZNajwiekszaIlosciaWizyt() {
-        Map<Integer, Integer> mapaLiczbyWizytLekarzy = new HashMap<>();
-        for (Wizyta wizyta : listaWizyt) {
-            int idLekarza = wizyta.getLekarz().getId();
-            mapaLiczbyWizytLekarzy.put(idLekarza, mapaLiczbyWizytLekarzy.getOrDefault(idLekarza, 0) + 1);
+    public <T extends Identifiable> T znajdzOsobeZNajwiekszaIlosciaWizyt(List<T> list, Function<T, List<Wizyta>> function) {
+        if (list.isEmpty()) {
+            throw new IllegalArgumentException("Lista osób jest pusta!");
         }
-        int maxWizyt = 0;
-        int idLekarzaZNajwiekszaIlosciaWizyt = -1;
-        for (Map.Entry<Integer, Integer> entry : mapaLiczbyWizytLekarzy.entrySet()) {
-            if (entry.getValue() > maxWizyt) {
-                maxWizyt = entry.getValue();
-                idLekarzaZNajwiekszaIlosciaWizyt = entry.getKey();
+        T max = list.get(0);
+        for (T t : list) {
+            if (function.apply(t).size() > function.apply(max).size()) {
+                max = t;
             }
         }
-        int finalIdLekarzaZNajwiekszaIlosciaWizyt = idLekarzaZNajwiekszaIlosciaWizyt;
-        return wyszukajObiektPoID(listaLekarzy, idLekarzaZNajwiekszaIlosciaWizyt, s -> s.getId() == finalIdLekarzaZNajwiekszaIlosciaWizyt);
+        return max;
     }
 
     public Pacjent znajdzPacjentaZNajwiekszaIlosciaWizyt() {
-        Map<Integer, Integer> mapaLiczbyWizytPacjenta = new HashMap<>();
-        for (Wizyta wizyta : listaWizyt) {
-            int idPacjenta = wizyta.getPacjent().getId();
-            mapaLiczbyWizytPacjenta.put(idPacjenta, mapaLiczbyWizytPacjenta.getOrDefault(idPacjenta, 0) + 1);
-        }
-        int maxWizyt = 0;
-        int idPacjentaZnajwiekszaIlosciaWizyt = -1;
-        for (Map.Entry<Integer, Integer> entry : mapaLiczbyWizytPacjenta.entrySet()) {
-            if (entry.getValue() > maxWizyt) {
-                maxWizyt = entry.getValue();
-                idPacjentaZnajwiekszaIlosciaWizyt = entry.getKey();
-            }
-        }
-        int finalIdPacjentaZnajwiekszaIlosciaWizyt = idPacjentaZnajwiekszaIlosciaWizyt;
-        return wyszukajObiektPoID(listaPacjentow, idPacjentaZnajwiekszaIlosciaWizyt, s -> s.getId() == finalIdPacjentaZnajwiekszaIlosciaWizyt);
+        return znajdzOsobeZNajwiekszaIlosciaWizyt(listaPacjentow, Pacjent::getListaWizyt);
+    }
+
+    public Lekarz znajdzLekarzaZNajwiekszaIlosciaWizyt() {
+        return znajdzOsobeZNajwiekszaIlosciaWizyt(listaLekarzy, Lekarz::getListaWizyt);
     }
 
     public String specjalizacjaZNajwiekszymPowodzeniem() {
@@ -165,57 +141,36 @@ public class WczytywanieDanych {
         return rokZNajwiekszaIlosciaWizyt;
     }
 
-    public List<Lekarz> top5NajstarszychLekarzy() {
+    public List<Lekarz> topXNajstarszychLekarzy(int x) {
         List<Lekarz> posortowaniLekarze = new ArrayList<>(listaLekarzy);
-        if (posortowaniLekarze.size() < 5) {
-            throw new ArrayStoreException("Podana lista jest za mała by wygenerować top 5 zawodników");
+        if (posortowaniLekarze.size() < x) {
+            throw new IllegalArgumentException("Podana lista jest za mała by wygenerować top 5 zawodników");
         }
         posortowaniLekarze.sort(Comparator.comparing(Lekarz::getDataUrodzenia));
-        int liczbaLekarzy = posortowaniLekarze.size();
-        int liczbaTopLekarzy = Math.min(5, liczbaLekarzy);
-        List<Lekarz> topLekarze = new ArrayList<>();
-        for (int i = 0; i < liczbaTopLekarzy; i++) {
-            int indeks = liczbaLekarzy - 1 - i;
-            topLekarze.add(posortowaniLekarze.get(indeks));
-        }
-        return topLekarze;
+        return posortowaniLekarze.subList(0, x);
     }
 
-    public List<Pacjent> pacjenciZMin5RoznymiLekarzami() {
-        Map<Integer, Set<Integer>> pacjentLekarzeMap = new HashMap<>();
-        for (Wizyta wizyta : listaWizyt) {
-            int pacjentId = wizyta.getPacjent().getId();
-            int lekarzId = wizyta.getLekarz().getId();
-            pacjentLekarzeMap.computeIfAbsent(pacjentId, k -> new HashSet<>()).add(lekarzId);
-        }
-        List<Pacjent> pacjenciZMin5RoznymiLekarzami = new ArrayList<>();
-        for (Map.Entry<Integer, Set<Integer>> entry : pacjentLekarzeMap.entrySet()) {
-            if (entry.getValue().size() >= 5) {
-                int pacjentId = entry.getKey();
-                pacjenciZMin5RoznymiLekarzami.add(wyszukajObiektPoID(listaPacjentow, pacjentId, s -> s.getId() == pacjentId));
+    public List<Pacjent> pacjenciZMinXRoznymiLekarzami(int x) {
+        List<Pacjent> result = new ArrayList<>();
+        for (Pacjent p : listaPacjentow) {
+            if (p.uIluLekarzyByl() >= x) {
+                result.add(p);
             }
         }
-        return pacjenciZMin5RoznymiLekarzami;
+        return result;
     }
 
     public List<Lekarz> lekarzeExclusive() {
-        Map<Integer, Set<Integer>> lekarzPacjenciMap = new HashMap<>();
-        for (Wizyta wizyta : listaWizyt) {
-            int lekarzId = wizyta.getLekarz().getId();
-            int pacjentId = wizyta.getPacjent().getId();
-            lekarzPacjenciMap.computeIfAbsent(lekarzId, k -> new HashSet<>()).add(pacjentId);
-        }
-        List<Lekarz> lekarzeExclusive = new ArrayList<>();
-        for (Map.Entry<Integer, Set<Integer>> entry : lekarzPacjenciMap.entrySet()) {
-            if (entry.getValue().size() == 1) {
-                int lekarzId = entry.getKey();
-                lekarzeExclusive.add(wyszukajObiektPoID(listaLekarzy, lekarzId, s -> s.getId() == lekarzId));
+        List<Lekarz> result = new ArrayList<>();
+        for (Lekarz l : listaLekarzy) {
+            if (l.iluMialUnikatowychPacjentow() == 1) {
+                result.add(l);
             }
         }
-        if (lekarzeExclusive.isEmpty()) {
-            System.out.println("Nie ma lekarza, który miałby tylko jednego pacjenta");
-            return Collections.emptyList();
-        }
-        return lekarzeExclusive;
+        return result;
+    }
+
+    public List<Lekarz> getListaLekarzy() {
+        return listaLekarzy;
     }
 }

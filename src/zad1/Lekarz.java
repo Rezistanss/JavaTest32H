@@ -2,9 +2,11 @@ package zad1;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-public class Lekarz {
+public class Lekarz implements Identifiable {
     private int id;
     private String nazwisko, imie, specjalizacja;
     private LocalDate dataUrodzenia;
@@ -22,16 +24,20 @@ public class Lekarz {
         this.listaWizyt = new ArrayList<>();
     }
 
+    public int iluMialUnikatowychPacjentow() {
+        Set<Pacjent> set = new HashSet<>();
+        for (Wizyta w : listaWizyt) {
+            set.add(w.getPacjent());
+        }
+        return set.size();
+    }
+
     public List<Wizyta> getListaWizyt() {
         return listaWizyt;
     }
 
     public void setListaWizyt(List<Wizyta> listaWizyt) {
         this.listaWizyt = listaWizyt;
-    }
-
-    public int getId() {
-        return id;
     }
 
     public void setId(int id) {
@@ -82,5 +88,10 @@ public class Lekarz {
                 ", pesel='" + pesel + '\'' +
                 ", iloscWizyt=" + listaWizyt.size() +
                 '}';
+    }
+
+    @Override
+    public int getID() {
+        return id;
     }
 }
