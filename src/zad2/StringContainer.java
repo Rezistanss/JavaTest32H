@@ -6,72 +6,105 @@ import zad2.exception.InvalidStringContainerPatternException;
 import java.time.LocalDateTime;
 import java.util.regex.Pattern;
 
-public class StringContainer {
+class StringContainer {
+    private static class Node {
+        String value;
+        LocalDateTime dateTimeAdded;
+        Node next;
+
+        Node(String value, Node next) {
+            this.value = value;
+            this.dateTimeAdded = LocalDateTime.now();
+            this.next = next;
+        }
+    }
+
     private final Pattern pattern;
     private final boolean duplicatedNotAllowed;
-    private String[] values;
-    private LocalDateTime[] dateTimes;
+    private Node head;
     private int size;
 
     public StringContainer(String patternRegex, boolean duplicatedNotAllowed) {
         this.pattern = Pattern.compile(patternRegex);
         this.duplicatedNotAllowed = duplicatedNotAllowed;
-        this.values = new String[1];
-        this.dateTimes = new LocalDateTime[1];
+        this.head = null;
         this.size = 0;
     }
 
     private boolean isDuplicate(String value) {
-        for (int i = 0; i < size; i++) {
-            if (values[i].equals(value)) {
+        Node current = head;
+        while (current != null) {
+            if (current.value.equals(value)) {
                 return true;
             }
+            current = current.next;
         }
         return false;
     }
 
     public void add(String value) {
         if (!pattern.matcher(value).matches()) {
-            throw new InvalidStringContainerPatternException("Niepoprawny kod: " + value);
+            throw new InvalidStringContainerPatternException("Invalid pattern: " + value);
         }
 
         if (duplicatedNotAllowed && isDuplicate(value)) {
-            throw new DuplicateElementOnListException("Duplikat nie jest dozwolony: " + value);
+            throw new DuplicateElementOnListException("Duplicated element not allowed: " + value);
         }
 
-        ensureCapacity();
-        values[size] = value;
-        dateTimes[size] = LocalDateTime.now();
+        head = new Node(value, head);
         size++;
     }
 
     public String get(int index) {
         if (index < 0 || index >= size) {
-            throw new IndexOutOfBoundsException("Index po za zasięgiem: " + index);
+            throw new IndexOutOfBoundsException("Index out of range: " + index);
         }
-        return values[index];
+
+        Node current = head;
+        for (int i = 0; i < index; i++) {
+            current = current.next;
+        }
+        return current.value;
     }
 
     public void remove(int index) {
         if (index < 0 || index >= size) {
-            throw new IndexOutOfBoundsException("Index po za zasięgiem: " + index);
+            throw new IndexOutOfBoundsException("Index out of range: " + index);
         }
 
-        System.arraycopy(values, index + 1, values, index, size - index - 1);
-        System.arraycopy(dateTimes, index + 1, dateTimes, index, size - index - 1);
+        if (index == 0) {
+            head = head.next;
+        } else {
+            Node prev = head;
+            for (int i = 0; i < index - 1; i++) {
+                prev = prev.next;
+            }
+            prev.next = prev.next.next;
+        }
         size--;
     }
 
     public void remove(String value) {
-        int index = -1;
-        for (int i = 0; i < size; i++) {
-            if (values[i].equals(value)) {
-                index = i;
-                break;
-            }
+        if (head == null) {
+            return;
         }
-        if (index != -1) {
-            remove(index);
+
+        if (head.value.equals(value)) {
+            head = head.next;
+            size--;
+            return;
+        }
+
+        Node prev = head;
+        Node current = head.next;
+        while (current != null) {
+            if (current.value.equals(value)) {
+                prev.next = current.next;
+                size--;
+                return;
+            }
+            prev = current;
+            current = current.next;
         }
     }
 
@@ -79,15 +112,19 @@ public class StringContainer {
         return size;
     }
 
-    private void ensureCapacity() {
-        if (size == values.length) {
-            int newCapacity = values.length * 2;
-            String[] newValues = new String[newCapacity];
-            LocalDateTime[] newDateTimes = new LocalDateTime[newCapacity];
-            System.arraycopy(values, 0, newValues, 0, size);
-            System.arraycopy(dateTimes, 0, newDateTimes, 0, size);
-            values = newValues;
-            dateTimes = newDateTimes;
+    public StringContainer getDataBetween(LocalDateTime dateFrom, LocalDateTime dateTo) {
+        StringContainer filteredContainer = new StringContainer(pattern.pattern(), duplicatedNotAllowed);
+
+        Node current = head;
+        while (current != null) {
+            LocalDateTime dateTimeAdded = current.dateTimeAdded;
+            if ((dateFrom == null || dateTimeAdded.isAfter(dateFrom)) &&
+                    (dateTo == null || dateTimeAdded.isBefore(dateTo))) {
+                filteredContainer.add(current.value);
+            }
+            current = current.next;
         }
+
+        return filteredContainer;
     }
 }
